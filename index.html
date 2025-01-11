@@ -1,1 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plastic Detection</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+</head>
+<body>
+    <h1>Plastic Detection in Browser</h1>
+    <input type="file" id="file-input" accept="image/*">
+    <br><br>
+    <canvas id="canvas"></canvas>
+    
+    <script>
+        // Load the TensorFlow.js model
+        async function loadModel() {
+            const model = await tf.loadGraphModel('path_to_your_model/model.json');
+            return model;
+        }
+
+        // Run the model for object detection
+        async function detectPlastic(model, imageElement) {
+            const tensor = tf.browser.fromPixels(imageElement).expandDims(0);
+            const predictions = await model.executeAsync(tensor);
+            
+            // Process predictions
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Draw the image on the canvas
+            canvas.width = imageElement.width;
+            canvas.height = imageElement.height;
+            ctx.drawImage(imageElement, 0, 0);
+            
+            // Loop through predictions and draw bounding boxes
+            predictions.forEach(prediction => {
+                const [x, y, width, height] = prediction['bbox']; // Assuming bbox format [x, y, width, height]
+                ctx.beginPath();
+                ctx.rect(x, y, width, height);
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = 'red';
+                ctx.stroke();
+                ctx.fillStyle = 'red';
+                ctx.fillText('Plastic', x, y > 10 ? y - 5 : 10);
+            });
+        }
+
+        // Handle file upload and image processing
+        document.getElementById('file-input').addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            const img = new Image();
+            img.onload = async () => {
+                const model = await loadModel();
+                await detectPlastic(model, img);
+            };
+            img.src = URL.createObjectURL(file);
+        });
+    </script>
+</body>
+</html>
 

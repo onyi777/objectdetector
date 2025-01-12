@@ -3,59 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plastic Detection</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <title>Real-Time Object Detection in Browser</title>
+    <style>
+        video {
+            width: 100%;
+            max-width: 640px;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
 </head>
 <body>
-    <h1>Plastic Detection in Browser</h1>
-    <input type="file" id="file-input" accept="image/*">
-    <br><br>
+    <h1>Real-Time Object Detection with TensorFlow.js</h1>
+
+    <!-- Video Feed -->
+    <video id="webcam" autoplay playsinline></video>
     <canvas id="canvas"></canvas>
-    
+
+    <!-- Include TensorFlow.js and COCO-SSD model -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <script>
-        // Load the TensorFlow.js model
+        let video;
+        let model;
+        let canvas;
+        let ctx;
+
+        // Initialize the webcam feed
+        async function setupWebcam() {
+            video = document.getElementById('webcam');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+
+            // Request webcam video stream
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+        }
+
+        // Load the COCO-SSD model (you can later switch to a custom model)
         async function loadModel() {
-            const model = await tf.loadGraphModel('path_to_your_model/model.json');
-            return model;
+            model = await cocoSsd.load();
+            console.log("Model loaded!");
+            detectObjects();
         }
 
-        // Run the model for object detection
-        async function detectPlastic(model, imageElement) {
-            const tensor = tf.browser.fromPixels(imageElement).expandDims(0);
-            const predictions = await model.executeAsync(tensor);
-            
-            // Process predictions
-            const canvas = document.getElementById('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            // Draw the image on the canvas
-            canvas.width = imageElement.width;
-            canvas.height = imageElement.height;
-            ctx.drawImage(imageElement, 0, 0);
-            
-            // Loop through predictions and draw bounding boxes
+        // Detect objects in the video stream
+        async function detectObjects() {
+            const predictions = await model.detect(video);
+
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Set the canvas size to match the video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // Draw the video frame onto the canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Draw bounding boxes around detected objects
             predictions.forEach(prediction => {
-                const [x, y, width, height] = prediction['bbox']; // Assuming bbox format [x, y, width, height]
                 ctx.beginPath();
-                ctx.rect(x, y, width, height);
-                ctx.lineWidth = 4;
+                ctx.rect(prediction.bbox[0], prediction.bbox[1], prediction.bbox[2], prediction.bbox[3]);
+                ctx.lineWidth = 2;
                 ctx.strokeStyle = 'red';
-                ctx.stroke();
                 ctx.fillStyle = 'red';
-                ctx.fillText('Plastic', x, y > 10 ? y - 5 : 10);
+                ctx.stroke();
+                ctx.fillText(
+                    `${prediction.class} (${Math.round(prediction.score * 100)}%)`,
+                    prediction.bbox[0],
+                    prediction.bbox[1] > 10 ? prediction.bbox[1] - 5 : 10
+                );
             });
+
+            // Call detectObjects again in the next animation frame
+            requestAnimationFrame(detectObjects);
         }
 
-        // Handle file upload and image processing
-        document.getElementById('file-input').addEventListener('change', async (event) => {
-            const file = event.target.files[0];
-            const img = new Image();
-            img.onload = async () => {
-                const model = await loadModel();
-                await detectPlastic(model, img);
-            };
-            img.src = URL.createObjectURL(file);
-        });
+        // Initialize everything
+        async function init() {
+            await setupWebcam();
+            await loadModel();
+        }
+
+        // Start everything once the page is ready
+        window.onload = init;
     </script>
 </body>
 </html>
